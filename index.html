@@ -1,170 +1,69 @@
-
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="UTF-8">
-<title>Pyramide Game Live</title>
-<style>
-body {
-  background: black;
-  color: white;
-  font-family: Arial;
-  text-align: center;
-}
-button {
-  padding: 10px;
-  margin: 5px;
-  font-size: 16px;
-}
-.player {
-  margin: 5px;
-}
-#pyramid div {
-  margin: 5px;
-  padding: 10px;
-  background: #222;
-  transition: all 0.5s;
-}
-</style>
+  <meta charset="UTF-8">
+  <title>Jeu Multijoueur</title>
 </head>
 <body>
 
-<h1>JEU DE LA PYRAMIDE 🔥</h1>
+<h2>Entrer ton nom</h2>
+<input type="text" id="nameInput" placeholder="Ton nom">
+<button onclick="joinGame()">Entrer</button>
 
-<div id="login">
-  <h2>Entre ton nom</h2>
-  <input id="username" placeholder="Ton nom">
-  <button onclick="joinGame()">Entrer</button>
-</div>
-
-<div id="game" style="display:none;">
-  <h2>Vote pour 5 joueurs (pas toi)</h2>
-  <div id="players"></div>
-  <button onclick="submitVote()">Valider Vote</button>
-  <p id="timer"></p>
-</div>
-
-<div id="results" style="display:none;">
-  <h2>Résultats</h2>
-  <div id="pyramid"></div>
-  <button onclick="newRound()">Nouvelle Manche</button>
-</div>
+<h2>Joueurs connectés :</h2>
+<ul id="playersList"></ul>
 
 <script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getDatabase, ref, set, onValue, remove, onDisconnect } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getDatabase, ref, set, onValue, update } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+  const firebaseConfig = {
+    apiKey: "AIzaSyCevyMqEcQ1FXLrTG2WUHD6SatVvWzAqF8",
+    authDomain: "project-394996803461899153.firebaseapp.com",
+    databaseURL: "https://project-394996803461899153-default-rtdb.europe-west1.firebasedatabase.app",
+    projectId: "project-394996803461899153",
+    storageBucket: "project-394996803461899153.firebasestorage.app",
+    messagingSenderId: "826202592382",
+    appId: "1:826202592382:web:841245858bf2f9229cb42f"
+  };
 
-const firebaseConfig = {
-  apiKey: "AIzaSyCevyMqEcQ1FXLrTG2WUHD6SatVvWzAqF8",
-  authDomain: "project-394996803461899153.firebaseapp.com",
-  projectId: "project-394996803461899153",
-  storageBucket: "project-394996803461899153.firebasestorage.app",
-  messagingSenderId: "826202592382",
-  appId: "1:826202592382:web:841245858bf2f9229cb42f"
-};
+  const app = initializeApp(firebaseConfig);
+  const db = getDatabase(app);
 
-const app = initializeApp(firebaseConfig);
-const db = getDatabase(app);
+  let playerId = Math.random().toString(36).substr(2, 9);
 
-let username = "";
-let votes = [];
-let timer = 180;
-let interval;
+  window.joinGame = function() {
+    const name = document.getElementById("nameInput").value;
 
-function joinGame() {
-  username = document.getElementById("username").value;
-  if (!username) return;
-
-  set(ref(db, "players/" + username), {
-    votes: 0
-  });
-
-  document.getElementById("login").style.display = "none";
-  document.getElementById("game").style.display = "block";
-
-  loadPlayers();
-  startTimer();
-}
-
-function loadPlayers() {
-  onValue(ref(db, "players"), snapshot => {
-    const data = snapshot.val();
-    const container = document.getElementById("players");
-    container.innerHTML = "";
-    votes = [];
-
-    for (let player in data) {
-      if (player !== username) {
-        const div = document.createElement("div");
-        div.className = "player";
-        div.innerHTML = `<input type="checkbox" value="${player}"> ${player}`;
-        container.appendChild(div);
-      }
+    if (!name) {
+      alert("Entre un nom !");
+      return;
     }
-  });
-}
 
-function submitVote() {
-  const checked = document.querySelectorAll("input[type=checkbox]:checked");
-  if (checked.length !== 5) {
-    alert("Tu dois voter pour 5 joueurs !");
-    return;
+    const playerRef = ref(db, "players/" + playerId);
+
+    set(playerRef, {
+      name: name
+    });
+
+    onDisconnect(playerRef).remove();
   }
 
-  checked.forEach(box => {
-    const playerRef = ref(db, "players/" + box.value);
-    onValue(playerRef, snapshot => {
-      const current = snapshot.val().votes;
-      update(playerRef, { votes: current + 1 });
-    }, { onlyOnce: true });
-  });
+  const playersRef = ref(db, "players");
 
-  alert("Vote enregistré !");
-}
-
-function startTimer() {
-  interval = setInterval(() => {
-    timer--;
-    document.getElementById("timer").innerText = "Temps restant: " + timer + "s";
-
-    if (timer <= 0) {
-      clearInterval(interval);
-      showResults();
-    }
-  }, 1000);
-}
-
-function showResults() {
-  document.getElementById("game").style.display = "none";
-  document.getElementById("results").style.display = "block";
-
-  onValue(ref(db, "players"), snapshot => {
+  onValue(playersRef, (snapshot) => {
     const data = snapshot.val();
-    const sorted = Object.entries(data).sort((a,b)=>b[1].votes-a[1].votes);
+    const list = document.getElementById("playersList");
+    list.innerHTML = "";
 
-    const pyramid = document.getElementById("pyramid");
-    pyramid.innerHTML = "";
-
-    sorted.forEach(player => {
-      const div = document.createElement("div");
-      div.innerText = player[0] + " - " + player[1].votes + " votes";
-      pyramid.appendChild(div);
-    });
-  });
-}
-
-function newRound() {
-  onValue(ref(db, "players"), snapshot => {
-    const data = snapshot.val();
-    for (let player in data) {
-      update(ref(db, "players/" + player), { votes: 0 });
+    for (let id in data) {
+      const li = document.createElement("li");
+      li.textContent = data[id].name;
+      list.appendChild(li);
     }
-  }, { onlyOnce: true });
-
-  location.reload();
-}
+  });
 
 </script>
+
 </body>
 </html>
