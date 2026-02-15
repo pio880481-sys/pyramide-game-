@@ -1,93 +1,132 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="UTF-8">
-  <title>Jeu Multijoueur</title>
+<meta charset="UTF-8">
+<title>Jeu Multijoueur</title>
+<style>
+body { background:black; color:white; text-align:center; font-family:Arial; }
+button { padding:10px; margin:10px; }
+</style>
 </head>
 <body>
 
-<!-- PAGE LOGIN -->
-<div id="loginScreen">
+<!-- PAGE 1 : SALLE D’ATTENTE -->
+<div id="waitingScreen">
   <h2>Entre ton nom</h2>
   <input type="text" id="nameInput" placeholder="Ton nom">
   <button onclick="joinGame()">Entrer</button>
-</div>
-
-<!-- PAGE JEU -->
-<div id="gameScreen" style="display:none;">
-  <h2>Bienvenue dans le jeu 🔥</h2>
-  <button onclick="leaveGame()">Quitter</button>
-
-  <h3>Joueurs connectés :</h3>
+  <h3 id="countdown">Temps restant : 60</h3>
+  <h4>Joueurs connectés :</h4>
   <ul id="playersList"></ul>
 </div>
 
+<!-- PAGE 2 : JEU -->
+<div id="gameScreen" style="display:none;">
+  <h2>🔥 La partie commence 🔥</h2>
+  <h3>Les joueurs :</h3>
+  <ul id="finalPlayers"></ul>
+</div>
+
 <script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import { getDatabase, ref, set, onValue, remove, onDisconnect } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getDatabase, ref, set, onValue, remove, onDisconnect, update } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
-  const firebaseConfig = {
-    apiKey: "AIzaSyCevyMqEcQ1FXLrTG2WUHD6SatVvWzAqF8",
-    authDomain: "project-394996803461899153.firebaseapp.com",
-    databaseURL: "https://project-394996803461899153-default-rtdb.europe-west1.firebasedatabase.app",
-    projectId: "project-394996803461899153",
-    storageBucket: "project-394996803461899153.firebasestorage.app",
-    messagingSenderId: "826202592382",
-    appId: "1:826202592382:web:841245858bf2f9229cb42f"
-  };
+const firebaseConfig = {
+  apiKey: "AIzaSyCevyMqEcQ1FXLrTG2WUHD6SatVvWzAqF8",
+  authDomain: "project-394996803461899153.firebaseapp.com",
+  databaseURL: "https://project-394996803461899153-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "project-394996803461899153",
+  storageBucket: "project-394996803461899153.firebasestorage.app",
+  messagingSenderId: "826202592382",
+  appId: "1:826202592382:web:841245858bf2f9229cb42f"
+};
 
-  const app = initializeApp(firebaseConfig);
-  const db = getDatabase(app);
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
 
-  let playerId = Math.random().toString(36).substr(2, 9);
-  let playerRef = null;
+let playerId = Math.random().toString(36).substr(2, 9);
+let playerRef = null;
+let timer = 60;
 
-  window.joinGame = function() {
-    const name = document.getElementById("nameInput").value;
+/* === TIMER GLOBAL === */
 
-    if (!name) {
-      alert("Entre un nom !");
-      return;
+const timerRef = ref(db, "gameTimer");
+
+onValue(timerRef, (snapshot) => {
+  const value = snapshot.val();
+  if (value !== null) {
+    document.getElementById("countdown").innerText = "Temps restant : " + value;
+    if (value <= 0) {
+      startGame();
     }
-
-    playerRef = ref(db, "players/" + playerId);
-
-    set(playerRef, {
-      name: name
-    }).then(() => {
-      document.getElementById("loginScreen").style.display = "none";
-      document.getElementById("gameScreen").style.display = "block";
-    });
-
-    onDisconnect(playerRef).remove();
   }
+});
 
-  window.leaveGame = function() {
-    if (playerRef) {
-      remove(playerRef);
+/* Si timer n'existe pas → le créer */
+set(timerRef, 60);
+
+/* Décrémentation */
+setInterval(() => {
+  onValue(timerRef, (snapshot) => {
+    const current = snapshot.val();
+    if (current > 0) {
+      update(ref(db), { gameTimer: current - 1 });
     }
+  }, { onlyOnce: true });
+}, 1000);
 
-    document.getElementById("gameScreen").style.display = "none";
-    document.getElementById("loginScreen").style.display = "block";
+/* === REJOINDRE === */
+
+window.joinGame = function() {
+  const name = document.getElementById("nameInput").value;
+  if (!name) return;
+
+  playerRef = ref(db, "players/" + playerId);
+
+  set(playerRef, { name: name });
+  onDisconnect(playerRef).remove();
+};
+
+/* === LISTE JOUEURS EN TEMPS RÉEL === */
+
+const playersRef = ref(db, "players");
+
+onValue(playersRef, (snapshot) => {
+  const data = snapshot.val();
+  const list = document.getElementById("playersList");
+  list.innerHTML = "";
+
+  if (data) {
+    for (let id in data) {
+      const li = document.createElement("li");
+      li.textContent = data[id].name;
+      list.appendChild(li);
+    }
   }
+});
 
-  const playersRef = ref(db, "players");
+/* === PASSAGE PAGE 2 === */
+
+function startGame() {
+  document.getElementById("waitingScreen").style.display = "none";
+  document.getElementById("gameScreen").style.display = "block";
+
+  const finalList = document.getElementById("finalPlayers");
+  finalList.innerHTML = "";
 
   onValue(playersRef, (snapshot) => {
     const data = snapshot.val();
-    const list = document.getElementById("playersList");
-    list.innerHTML = "";
-
+    finalList.innerHTML = "";
     if (data) {
       for (let id in data) {
         const li = document.createElement("li");
         li.textContent = data[id].name;
-        list.appendChild(li);
+        finalList.appendChild(li);
       }
     }
   });
+}
 
 </script>
-
 </body>
 </html>
