@@ -6,12 +6,21 @@
 </head>
 <body>
 
-<h2>Entrer ton nom</h2>
-<input type="text" id="nameInput" placeholder="Ton nom">
-<button onclick="joinGame()">Entrer</button>
+<!-- PAGE LOGIN -->
+<div id="loginScreen">
+  <h2>Entre ton nom</h2>
+  <input type="text" id="nameInput" placeholder="Ton nom">
+  <button onclick="joinGame()">Entrer</button>
+</div>
 
-<h2>Joueurs connectés :</h2>
-<ul id="playersList"></ul>
+<!-- PAGE JEU -->
+<div id="gameScreen" style="display:none;">
+  <h2>Bienvenue dans le jeu 🔥</h2>
+  <button onclick="leaveGame()">Quitter</button>
+
+  <h3>Joueurs connectés :</h3>
+  <ul id="playersList"></ul>
+</div>
 
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
@@ -31,6 +40,7 @@
   const db = getDatabase(app);
 
   let playerId = Math.random().toString(36).substr(2, 9);
+  let playerRef = null;
 
   window.joinGame = function() {
     const name = document.getElementById("nameInput").value;
@@ -40,13 +50,25 @@
       return;
     }
 
-    const playerRef = ref(db, "players/" + playerId);
+    playerRef = ref(db, "players/" + playerId);
 
     set(playerRef, {
       name: name
+    }).then(() => {
+      document.getElementById("loginScreen").style.display = "none";
+      document.getElementById("gameScreen").style.display = "block";
     });
 
     onDisconnect(playerRef).remove();
+  }
+
+  window.leaveGame = function() {
+    if (playerRef) {
+      remove(playerRef);
+    }
+
+    document.getElementById("gameScreen").style.display = "none";
+    document.getElementById("loginScreen").style.display = "block";
   }
 
   const playersRef = ref(db, "players");
@@ -56,10 +78,12 @@
     const list = document.getElementById("playersList");
     list.innerHTML = "";
 
-    for (let id in data) {
-      const li = document.createElement("li");
-      li.textContent = data[id].name;
-      list.appendChild(li);
+    if (data) {
+      for (let id in data) {
+        const li = document.createElement("li");
+        li.textContent = data[id].name;
+        list.appendChild(li);
+      }
     }
   });
 
