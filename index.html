@@ -1,274 +1,170 @@
+
 <!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Pyramid Game - Vote Secret</title>
-
+<title>Pyramide Game Live</title>
 <style>
 body {
-  margin: 0;
-  font-family: Arial;
-  background: #0d0d0d;
+  background: black;
   color: white;
+  font-family: Arial;
   text-align: center;
 }
-
-h1 { color: crimson; }
-
 button {
-  padding: 10px 20px;
-  margin: 10px;
-  background: crimson;
-  border: none;
-  color: white;
-  cursor: pointer;
-}
-
-input {
   padding: 10px;
-  margin: 10px;
+  margin: 5px;
+  font-size: 16px;
 }
-
-.page { display: none; padding: 40px; }
-.active { display: block; }
-
-.timer {
-  font-size: 26px;
-  margin: 20px;
-  color: gold;
+.player {
+  margin: 5px;
+}
+#pyramid div {
+  margin: 5px;
+  padding: 10px;
+  background: #222;
+  transition: all 0.5s;
 }
 </style>
 </head>
 <body>
 
-<!-- Sons -->
-<audio id="tensionSound" loop>
-  <source src="https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3" type="audio/mpeg">
-</audio>
+<h1>JEU DE LA PYRAMIDE 🔥</h1>
 
-<audio id="dramaSound">
-  <source src="https://assets.mixkit.co/active_storage/sfx/1435/1435-preview.mp3" type="audio/mpeg">
-</audio>
-
-<!-- PAGE 1 -->
-<div id="page1" class="page active">
-  <h1>Entrer les joueurs</h1>
-  <input type="text" id="playerName" placeholder="Nom du joueur">
-  <button onclick="addPlayer()">Ajouter</button>
-  <button onclick="startVoting()">Commencer</button>
-  <div id="playerList"></div>
+<div id="login">
+  <h2>Entre ton nom</h2>
+  <input id="username" placeholder="Ton nom">
+  <button onclick="joinGame()">Entrer</button>
 </div>
 
-<!-- PAGE 2 -->
-<div id="page2" class="page">
-  <h1 id="voterTitle"></h1>
-  <div class="timer" id="timer">03:00</div>
-  <div id="voteOptions"></div>
+<div id="game" style="display:none;">
+  <h2>Vote pour 5 joueurs (pas toi)</h2>
+  <div id="players"></div>
   <button onclick="submitVote()">Valider Vote</button>
+  <p id="timer"></p>
 </div>
 
-<script>
+<div id="results" style="display:none;">
+  <h2>Résultats</h2>
+  <div id="pyramid"></div>
+  <button onclick="newRound()">Nouvelle Manche</button>
+</div>
 
-let players = [];
-let currentVoterIndex = 0;
-let timeLeft = 180;
-let timerInterval;
+<script type="module">
 
-const tensionSound = document.getElementById("tensionSound");
-const dramaSound = document.getElementById("dramaSound");
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getDatabase, ref, set, onValue, update } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
-function showPage(id) {
-  document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
-  document.getElementById(id).classList.add("active");
-}
+const firebaseConfig = {
+  apiKey: "AIzaSyCevyMqEcQ1FXLrTG2WUHD6SatVvWzAqF8",
+  authDomain: "project-394996803461899153.firebaseapp.com",
+  projectId: "project-394996803461899153",
+  storageBucket: "project-394996803461899153.firebasestorage.app",
+  messagingSenderId: "826202592382",
+  appId: "1:826202592382:web:841245858bf2f9229cb42f"
+};
 
-function addPlayer() {
-  let name = document.getElementById("playerName").value.trim();
-  if (!name) return;
-  players.push({ name: name, votes: 0 });
-  document.getElementById("playerName").value = "";
-  updatePlayerList();
-}
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
 
-function updatePlayerList() {
-  let list = document.getElementById("playerList");
-  list.innerHTML = "<h3>Joueurs :</h3>";
-  players.forEach(p => list.innerHTML += p.name + "<br>");
-}
+let username = "";
+let votes = [];
+let timer = 180;
+let interval;
 
-function startVoting() {
-  if (players.length < 2) {
-    alert("Ajoute au moins 2 joueurs !");
-    return;
-  }
+function joinGame() {
+  username = document.getElementById("username").value;
+  if (!username) return;
 
-  currentVoterIndex = 0;
-  timeLeft = 180;
+  set(ref(db, "players/" + username), {
+    votes: 0
+  });
 
-  showPage("page2");
-  tensionSound.play();
+  document.getElementById("login").style.display = "none";
+  document.getElementById("game").style.display = "block";
+
+  loadPlayers();
   startTimer();
-  loadVoter();
 }
 
-function loadVoter() {
-  if (currentVoterIndex >= players.length) {
-    showResults();
-    return;
-  }
+function loadPlayers() {
+  onValue(ref(db, "players"), snapshot => {
+    const data = snapshot.val();
+    const container = document.getElementById("players");
+    container.innerHTML = "";
+    votes = [];
 
-  let voter = players[currentVoterIndex];
-  document.getElementById("voterTitle").innerText =
-    voter.name + ", vote secrètement 👁";
-
-  let container = document.getElementById("voteOptions");
-  container.innerHTML = "";
-
-  players.forEach((p,i) => {
-    if (i !== currentVoterIndex) {
-      container.innerHTML += `
-        <label>
-          <input type="checkbox" value="${i}">
-          ${p.name}
-        </label><br>
-      `;
+    for (let player in data) {
+      if (player !== username) {
+        const div = document.createElement("div");
+        div.className = "player";
+        div.innerHTML = `<input type="checkbox" value="${player}"> ${player}`;
+        container.appendChild(div);
+      }
     }
   });
 }
 
 function submitVote() {
-  let checkboxes = document.querySelectorAll("#voteOptions input:checked");
-
-  if (checkboxes.length > 5) {
-    alert("Maximum 5 votes !");
+  const checked = document.querySelectorAll("input[type=checkbox]:checked");
+  if (checked.length !== 5) {
+    alert("Tu dois voter pour 5 joueurs !");
     return;
   }
 
-  checkboxes.forEach(cb => {
-    players[cb.value].votes += 1;
+  checked.forEach(box => {
+    const playerRef = ref(db, "players/" + box.value);
+    onValue(playerRef, snapshot => {
+      const current = snapshot.val().votes;
+      update(playerRef, { votes: current + 1 });
+    }, { onlyOnce: true });
   });
 
-  currentVoterIndex++;
-  loadVoter();
+  alert("Vote enregistré !");
 }
 
 function startTimer() {
-  timerInterval = setInterval(() => {
-    timeLeft--;
+  interval = setInterval(() => {
+    timer--;
+    document.getElementById("timer").innerText = "Temps restant: " + timer + "s";
 
-    let minutes = Math.floor(timeLeft / 60);
-    let seconds = timeLeft % 60;
-
-    document.getElementById("timer").innerText =
-      (minutes < 10 ? "0" : "") + minutes + ":" +
-      (seconds < 10 ? "0" : "") + seconds;
-
-    if (timeLeft <= 0) {
-      clearInterval(timerInterval);
+    if (timer <= 0) {
+      clearInterval(interval);
       showResults();
     }
   }, 1000);
 }
 
 function showResults() {
-  clearInterval(timerInterval);
-  tensionSound.pause();
+  document.getElementById("game").style.display = "none";
+  document.getElementById("results").style.display = "block";
 
-  document.body.innerHTML = `
-    <div style="
-      background:black;
-      color:red;
-      height:100vh;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      font-size:40px;
-      letter-spacing:5px;
-      animation: fadeText 2s infinite alternate;
-    ">
-      LES RÉSULTATS ARRIVENT...
-    </div>
+  onValue(ref(db, "players"), snapshot => {
+    const data = snapshot.val();
+    const sorted = Object.entries(data).sort((a,b)=>b[1].votes-a[1].votes);
 
-    <style>
-      @keyframes fadeText {
-        from { opacity: 0.3; }
-        to { opacity: 1; }
-      }
-    </style>
-  `;
+    const pyramid = document.getElementById("pyramid");
+    pyramid.innerHTML = "";
 
-  setTimeout(() => {
-
-    dramaSound.play();
-
-    document.body.innerHTML = `
-      <div style="background:#0d0d0d;color:white;text-align:center;font-family:Arial;min-height:100vh;padding:40px;">
-        <h1 style="color:crimson;">Résultat Final</h1>
-        <div id="pyramid"></div>
-        <br><br>
-        <button onclick="newRound()" 
-          style="padding:12px 25px;background:gold;color:black;font-weight:bold;border:none;cursor:pointer;">
-          🔁 Nouvelle Manche
-        </button>
-      </div>
-    `;
-
-    players.sort((a,b) => b.votes - a.votes);
-    let pyramid = document.getElementById("pyramid");
-
-    let reversedPlayers = [...players].reverse();
-    let index = 0;
-
-    function revealNext() {
-      if (index >= reversedPlayers.length) return;
-
-      let player = reversedPlayers[index];
-      let realIndex = players.indexOf(player);
-
-      let div = document.createElement("div");
-      div.style.margin = "15px auto";
-      div.style.padding = "15px";
-      div.style.borderRadius = "10px";
-      div.style.width = (30 + realIndex * 5) + "%";
-      div.style.opacity = "0";
-      div.style.transition = "all 0.8s ease";
-
-      if (realIndex === 0) {
-        div.style.background = "gold";
-        div.style.color = "black";
-        div.style.fontSize = "26px";
-      } else if (realIndex <= 2) {
-        div.style.background = "#ff4d4d";
-      } else if (realIndex <= 5) {
-        div.style.background = "#4da6ff";
-      } else if (realIndex <= 8) {
-        div.style.background = "#66ff66";
-      } else {
-        div.style.background = "#444";
-      }
-
-      div.innerHTML = player.name + " - " + player.votes + " votes";
-      pyramid.prepend(div);
-
-      setTimeout(() => div.style.opacity = "1", 100);
-
-      index++;
-      setTimeout(revealNext, 1500);
-    }
-
-    revealNext();
-
-  }, 5000);
+    sorted.forEach(player => {
+      const div = document.createElement("div");
+      div.innerText = player[0] + " - " + player[1].votes + " votes";
+      pyramid.appendChild(div);
+    });
+  });
 }
 
 function newRound() {
-  players.forEach(p => p.votes = 0);
-  currentVoterIndex = 0;
-  timeLeft = 180;
+  onValue(ref(db, "players"), snapshot => {
+    const data = snapshot.val();
+    for (let player in data) {
+      update(ref(db, "players/" + player), { votes: 0 });
+    }
+  }, { onlyOnce: true });
+
   location.reload();
 }
 
 </script>
-
 </body>
 </html>
